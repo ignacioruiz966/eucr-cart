@@ -1,5 +1,7 @@
 #include <IRremote.hpp>
+#include <Servo.h>
 
+Servo myservo; //creates servo object to control the motor
 
 // Ultrasonic Pins
 const int trigPin = 9;
@@ -81,11 +83,25 @@ void setup() {
   IrReceiver.begin(RECV_PIN, ENABLE_LED_FEEDBACK);
 
   motorStartup();
+
+  myservo.attach(7);
   
 }
 
 void loop() {
   /*
+  //Swings motor from 0 to 180 degrees
+  for (int angle = 0; angle <= 180; angle += 1){
+    myservo.write(180-angle); //rotation direction clockwise
+    delay(15); //waits 15ms for the servo to reach the position
+  }
+
+  //Swings motor from 180 to 0 degrees
+  for (int angle = 180; angle >= 0; angle -= 1) {
+    myservo.write(180 - write); //rotation direction counterclockwise
+    delay(15); //waits 15ms for the servo to reach the position
+  }
+  
   digitalWrite(trigPin, LOW);
   delayMicroseconds(2);
   
