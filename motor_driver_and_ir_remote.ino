@@ -1,11 +1,13 @@
 #include <IRremote.hpp>
 #include <Servo.h>
 
-Servo myservo; //creates servo object to control the motor
-
 // Ultrasonic Pins
-const int trigPin = 9;
-const int echoPin = 10;
+const int TRIG_PIN = 6;
+const int ECHO_PIN = 7;
+
+// Filtering US samples
+const int FILTER_SAMPLES = 5;
+const float SPEED_OF_SOUND = 0.0343;
 
 // KY-022 signal pin
 const int RECV_PIN = 8;
@@ -15,8 +17,6 @@ const unsigned long UP = 0xE718FF00;
 const unsigned long DOWN = 0xAD52FF00;
 const unsigned long RIGHT = 0xA55AFF00;
 const unsigned long LEFT = 0xF708FF00;
-
-
 
 // motor PWM pins
 const int ENA = 5;
@@ -29,11 +29,13 @@ const int IN2 = 10;
 const int IN3 = 11;
 const int IN4 = 12;
 
+// SERVO 
+Servo myservo;
+const int SERVO_PIN = 4;
+int pos = 45;
 
 
-// Ultrasonic measurements
-long duration;
-int distance;
+
 
 
 void motorStartup(){
@@ -42,7 +44,6 @@ void motorStartup(){
   pinMode(IN3, OUTPUT);
   pinMode(IN4, OUTPUT);
 }
-
 
 void motorForward(){
   digitalWrite(IN1, HIGH);
@@ -75,58 +76,137 @@ void motorBackward(){
   analogWrite(ENB, 255); 
 }
 
+void motorLeft(){
+  digitalWrite(IN1, HIGH);
+  digitalWrite(IN2, LOW);
+  digitalWrite(IN3, LOW);
+  digitalWrite(IN4, HIGH);
+
+  analogWrite(ENA, 255);
+  analogWrite(ENB, 255); 
+}
+
+void motorRight(){
+  digitalWrite(IN1, LOW);
+  digitalWrite(IN2, HIGH);
+  digitalWrite(IN3, HIGH);
+  digitalWrite(IN4, LOW);
+
+  analogWrite(ENA, 255);
+  analogWrite(ENB, 255); 
+}
+
+float getFilteredDistance() {
+
+  // Sends pulses and records them
+  long samples[FILTER_SAMPLES];
+
+  for (int i = 0; i < FILTER_SAMPLES; i++) {
+    digitalWrite(TRIG_PIN, LOW);
+    delayMicroseconds(2);
+
+    digitalWrite(TRIG_PIN, HIGH);
+    delayMicroseconds(10);
+    digitalWrite(TRIG_PIN, LOW);
+
+    int duration = pulseIn(ECHO_PIN, HIGH, 26000);
+
+    if (duration == 0) {
+      samples[i] = 99999;
+    }
+    else {
+      samples[i] = duration;
+    }
+
+    delay(10);
+
+  }
+
+
+  // Simple Bubble Sort
+  for (int i = 0; i < FILTER_SAMPLES - 1; i++) {
+    for (int j = 0; j < FILTER_SAMPLES - i - 1; j++) {
+      if (samples[j] > samples[j + 1]) {
+        long temp = samples[j];
+        samples[j] = samples[j + 1];
+        samples[j + 1] = temp;
+      }
+    }
+  }
+
+
+  // returns the median duration
+  long medianDuration = samples[FILTER_SAMPLES / 2];
+
+  if (medianDuration == 99999) {
+    return -1.0;
+  }
+
+  return (medianDuration * SPEED_OF_SOUND) / 2.0;
+
+}
+
 
 void setup() {
+  
   Serial.begin(9600);
 
-  // start the receiver
+  // US Setup
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+  digitalWrite(TRIG_PIN, LOW);
+
+  // Servo Setup
+  myservo.attach(SERVO_PIN);
+
+  // Starts the receiver
   IrReceiver.begin(RECV_PIN, ENABLE_LED_FEEDBACK);
 
   motorStartup();
-
-  myservo.attach(7);
   
 }
 
 void loop() {
-  /*
-  //Swings motor from 0 to 180 degrees
-  for (int angle = 0; angle <= 180; angle += 1){
-    myservo.write(180-angle); //rotation direction clockwise
-    delay(15); //waits 15ms for the servo to reach the position
-  }
 
-  //Swings motor from 180 to 0 degrees
-  for (int angle = 180; angle >= 0; angle -= 1) {
-    myservo.write(180 - write); //rotation direction counterclockwise
-    delay(15); //waits 15ms for the servo to reach the position
-  }
-  
-  digitalWrite(trigPin, LOW);
-  delayMicroseconds(2);
-  
-  digitalWrite(trigPin, HIGH);
-  delayMicroseconds(10);
-  digitalWrite(trigPin, LOW);
-  
-  duration = pulseIn(echoPin, HIGH);
-  distance = duration * 0.034 / 2;
-  
-  Serial.print("Distance: ");
-  Serial.print(distance);
-  Serial.println(" cm");
+  float currentDistance = getFilteredDistance();
 
-  if (distance >= 50) {
-    digitalWrite(IN1, HIGH);
-  }
-  else
-  {
-    digitalWrite(IN1, LOW);
+
+  // WIP Servo Code
+  for (pos = 45; pos <= 135; pos += 15) {
+    myservo.write(pos);
+
+    if (currentDistance < 0){
+    Serial.println("Error: Out of range or timed out");
+  } 
+  else {
+    Serial.println("Filtered Distance");
+    Serial.println(currentDistance);
+    Serial.print(" cm\n");
+
   }
 
   delay(500);
-  */
 
+  }
+  for (pos = 135; pos >= 45; pos -= 15) {
+    myservo.write(pos);
+
+    if (currentDistance < 0){
+    Serial.println("Error: Out of range or timed out");
+  } 
+  else {
+    Serial.println("Filtered Distance");
+    Serial.println(currentDistance);
+    Serial.print(" cm\n");
+
+  }
+
+  delay(500);
+  
+  }
+
+  
+  // Listens to IR remote & runs motor functions
   if (IrReceiver.decode()) {
     unsigned long IrInput = IrReceiver.decodedIRData.decodedRawData;
     if (IrInput == UP){
@@ -140,30 +220,19 @@ void loop() {
 
     }
      else if (IrInput == RIGHT) {
-      
+      motorRight();
+      delay(2000);
+
     }
      else if (IrInput == LEFT) {
-      
+      motorLeft();
+      delay(2000);
     }
     motorBrake();
 
     IrReceiver.resume();
   }
-
-  /*
-
-  motorForward();
-  delay(2000);
-
-  // Stop motor
-  motorBrake();
-  delay(1000);
-
-  // Turn motor reverse at half speed
-  motorBackward();
-  delay(2000);
-  */
-
+  
 }
 
 
